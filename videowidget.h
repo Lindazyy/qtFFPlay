@@ -41,10 +41,11 @@ public:
     void stopVideo();
     void setPosition(int64_t);
     void quickFlash(int64_t);
+    void frameFlash(int64_t, int64_t);
     int width; int height;
-    int64_t timestamp;
+    int64_t timestamp = 0;
     int64_t duration;
-    QString path = "F:\\Lindazyy\\Qt\\video\\Wildlife2.mp4";
+    QString path;
     int framecnt = 0;
 private:
     QImage image;
@@ -56,6 +57,7 @@ private:
     AVFrame* pFrameRGB;		//yuv frame, transmit source stream data
     uint8_t* bufferRGB;
     AVStream *stream;
+    int videoStream;
     //QPainter *pp;
 signals:
     void videoEnd();

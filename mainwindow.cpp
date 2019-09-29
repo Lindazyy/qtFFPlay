@@ -6,7 +6,7 @@ MainWindow::MainWindow(QWidget *parent)
 {
     //MainWindow自带layout，所以需要自定义layout并把它设置成中心layout
     //否则将会出现不能设置layout错误
-    QWidget *widget = new QWidget;
+    widget = new QWidget;
     this->setCentralWidget(widget);
 
     //设置按钮样式和文字
@@ -22,20 +22,18 @@ MainWindow::MainWindow(QWidget *parent)
     //image = new QImage();
     video = new videoWidget(widget);
     video->setGeometry(0,0,720,640);
-    video->setMinimumSize(720,640);
-    video->playVideo();
+    video->setMinimumSize(240,180);
 
     totelTime = new QTime(0,0,0);
-    currentTime = new QTime();
+    currentTime = new QTime(0,0,0);
     beginTimeLabel = new QLabel(widget);
     endTimeLabel = new QLabel(widget);
     beginTimeLabel->setText("00:00:00");
-    *totelTime = totelTime->addSecs((int)video->duration/1000000);
-    endTimeLabel->setText(totelTime->toString("hh:mm:ss"));
+    endTimeLabel->setText("00:00:00");
 
-    this->setGeometry(0,0,video->width,video->height);
+    //this->setGeometry(0,0,video->width,video->height);
 
-    progressBar = new CustomSlider;
+    progressBar = new CustomSlider(widget);
     progressBar->setOrientation(Qt::Horizontal);
     progressBar->setRange(0, maxValue);
 
@@ -43,25 +41,23 @@ MainWindow::MainWindow(QWidget *parent)
     sliderTimer = new QTimer(this);
     sliderTimer->setInterval(100);//如果想看起来流畅些，可以把时间间隔调小，如100ms
     frameUpdateTimer = new QTimer(this);
-    //frameUpdateTimer->setInterval(20);
     renderTimer = new QTimer(this);
-    //renderTimer->setInterval(20);
 
     //水平布局，控制按钮
-    QBoxLayout *ctlLayout = new QHBoxLayout();
+    ctlLayout = new QHBoxLayout;
     ctlLayout->addWidget(openFileBtn);
     ctlLayout->addWidget(playBtn);
     ctlLayout->addWidget(fullScrBtn);
     ctlLayout->addWidget(replayBtn);
 
     //滑条的水平布局
-    QBoxLayout *sliderLayout = new QHBoxLayout;
+    sliderLayout = new QHBoxLayout;
     sliderLayout->addWidget(beginTimeLabel);
     sliderLayout->addWidget(progressBar);
     sliderLayout->addWidget(endTimeLabel);
 
     //垂直布局：视频播放器、进度条、控制按钮布局
-    QBoxLayout *mainLayout = new QVBoxLayout;
+    mainLayout = new QVBoxLayout;
     mainLayout->addWidget(video);
     mainLayout->addLayout(sliderLayout);
     mainLayout->addLayout(ctlLayout);
@@ -83,7 +79,6 @@ MainWindow::MainWindow(QWidget *parent)
     connect(video, SIGNAL(videoEnd()), this, SLOT(videoStop()));
     connect(frameUpdateTimer, SIGNAL(timeout()), video, SLOT(updateFrame()));
     sliderTimer->start();
-    frameUpdateTimer->start(30);
     renderTimer->start(30);
 
 
@@ -97,15 +92,34 @@ MainWindow::~MainWindow()
 void MainWindow::openFile()
 {
     //可以多选，返回值为多选的文件List
-    QString dir;
-    QString srcDirPath = QFileDialog::getOpenFileName(this, "Open Document", QDir::currentPath(), "Media files (*.mp4 *.avi *.ts *.flv *.mpg *.wmv *.mkv *.mov *.vob);;All files(*.*)");
-    if (!srcDirPath.isNull()) {//用户选择取消的情况
+    QString srcDirPath;
+    frameUpdateTimer->stop();
+    if(path.isEmpty())
+        srcDirPath = QFileDialog::getOpenFileName(this, "Open Document", QDir::currentPath(), "Media files (*.mp4 *.avi *.ts *.flv *.mpg *.wmv *.mkv *.mov *.vob);;All files(*.*)");
+    else srcDirPath = QFileDialog::getOpenFileName(this, "Open Document", path, "Media files (*.mp4 *.avi *.ts *.flv *.mpg *.wmv *.mkv *.mov *.vob);;All files(*.*)");
+    if (!srcDirPath.isNull()) {
+        if(!video->path.isEmpty()){
+            video->stopVideo();
+        }
+        video->path = srcDirPath;
+        video->playVideo();
+        video->setGeometry(0,0,video->width,video->height);
+        //widget->setGeometry(0,0,video->width,video->height);
+        play_state = true;
+        playBtn->setText("stop");
+        QTime time(0,0,0);
+        *totelTime = time.addSecs((int)video->duration/1000000);
+        endTimeLabel->setText(totelTime->toString("hh:mm:ss"));
+        frameUpdateTimer->start(30);
         QFileInfo fileInfo(srcDirPath);
-        dir = fileInfo.path();
-    }else{
-        dir = QDir::currentPath();
+        path = fileInfo.path();
+    }else{//用户选择取消的情况
+        if(!video->path.isEmpty()){
+            playBtn->setText("stop");
+            play_state = true;
+            frameUpdateTimer->start(30);
+        }
     }
-
 }
 
 void MainWindow::on_pushButton_play_and_pause_clicked()
@@ -115,12 +129,10 @@ void MainWindow::on_pushButton_play_and_pause_clicked()
     if(play_state)
     {
         frameUpdateTimer->stop();
-        //renderTimer->stop();
         playBtn->setText("play");
     }
     else
     {
-        //renderTimer->start();
         frameUpdateTimer->start();
         playBtn->setText("stop");
     }
@@ -148,7 +160,6 @@ void MainWindow::fullScr()
 
 void MainWindow::slider_progress_clicked()
 {
-    //player->setPosition(progressBar->value()*player->duration()/maxValue);
     video->setPosition(progressBar->value()*video->duration/maxValue);
 
 }
@@ -157,7 +168,6 @@ void MainWindow::slider_progress_moved()
 {
     //暂时停止计时器，在用户拖动过程中不修改slider的值
     sliderTimer->stop();
-    //player->setPosition(progressBar->value()*player->duration()/maxValue);
     video->quickFlash(progressBar->value()*video->duration/maxValue);
 }
 
@@ -180,5 +190,4 @@ void MainWindow::sliderRenew()
 
 void MainWindow::videoStop(){
     frameUpdateTimer->stop();
-    //video->stopVideo();
 }

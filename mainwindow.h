@@ -27,10 +27,14 @@ public:
     MainWindow(QWidget *parent = nullptr);
     ~MainWindow();
 private:
+    QWidget *widget;
     QPushButton *openFileBtn;
     QPushButton *playBtn;
     QPushButton *replayBtn;
     QPushButton *fullScrBtn;
+    QBoxLayout *ctlLayout;
+    QBoxLayout *sliderLayout;
+    QBoxLayout *mainLayout;
 
     QImage *image;
     videoWidget *video;
@@ -42,6 +46,7 @@ private:
     QTimer * sliderTimer;
     QTimer * frameUpdateTimer;
     QTimer * renderTimer;
+    QString path;
     int maxValue = 1000;
     bool play_state = false;
 private slots:

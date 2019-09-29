@@ -6,9 +6,6 @@ extern omp_lock_t lock;
 videoWidget::videoWidget(QWidget *parent) : QVideoWidget(parent)
 {
     avformat_network_init();
-    //pp = new QPainter(this);
-    //image.load("F:\\Lindazyy\\vs\\Project1\\Project1\\lena.jpg");
-
 }
 
 void videoWidget::paintEvent(QPaintEvent *e)
@@ -19,7 +16,6 @@ void videoWidget::paintEvent(QPaintEvent *e)
     omp_set_lock(&lock);
     pp.drawImage(Temp, image);
     omp_unset_lock(&lock);
-    //qDebug() << "aaaaaaaaaa";
 }
 
 void videoWidget::playVideo(){
@@ -38,7 +34,7 @@ void videoWidget::playVideo(){
     duration = pFormatCtx->duration;
 
     //找到视频对应的avstream id，并初始化编解码器
-    int videoStream = av_find_best_stream(pFormatCtx, AVMEDIA_TYPE_VIDEO, -1, -1, &pCodec, 0);
+    videoStream = av_find_best_stream(pFormatCtx, AVMEDIA_TYPE_VIDEO, -1, -1, &pCodec, 0);
     if (pCodec == nullptr) {
         qDebug() << "Unsupported Codec!\n";
         exit(1);
@@ -65,12 +61,9 @@ void videoWidget::updateFrame(){
 
     AVPacket                packet;
     int ret;
-    //int completed, framecnt;
-
-
     do{
         ret = av_read_frame(pFormatCtx, &packet);
-    }while(packet.stream_index != 0);
+    }while(packet.stream_index != videoStream);
     stream = pFormatCtx->streams[packet.stream_index];
     if (ret >= 0) {
         framecnt++;
@@ -84,8 +77,6 @@ void videoWidget::updateFrame(){
             return;
         }
         timestamp = packet.pts* av_q2d(stream->time_base)*AV_TIME_BASE;
-        //std::cout << "timestamp: " << timestamp << std::endl;
-        //framecnt = packet.pts / 1000;
         sws_scale(sws_ctx, (uint8_t const* const*)frame->data, frame->linesize, 0, pCodecCtx->height, pFrameRGB->data, pFrameRGB->linesize);
         QImage img((uchar *)bufferRGB,width,height,QImage::Format_RGB888);
         omp_set_lock(&lock);
@@ -156,4 +147,29 @@ void videoWidget::quickFlash(int64_t position){
     else return;
     av_packet_unref(&pkt);
 
+}
+
+void videoWidget::frameFlash(int64_t position, int64_t status){
+    AVPacket pkt;
+    int64_t temp = 0;
+    if(position>status){
+        while(temp <= position) {
+            int ret = av_read_frame(pFormatCtx, &pkt);
+            if(ret>=0 && pkt.stream_index==0){
+                avcodec_send_packet(pCodecCtx, &pkt);
+                avcodec_receive_frame(pCodecCtx, frame);
+                temp = pkt.pts* av_q2d(stream->time_base)*AV_TIME_BASE;
+                timestamp = temp;
+            }
+        }
+        sws_scale(sws_ctx, (uint8_t const* const*)frame->data, frame->linesize, 0, pCodecCtx->height, pFrameRGB->data, pFrameRGB->linesize);
+        QImage img((uchar *)bufferRGB,width,height,QImage::Format_RGB888);
+        omp_set_lock(&lock);
+        image = img.copy();
+        omp_unset_lock(&lock);
+        av_packet_unref(&pkt);
+    }
+    else{
+
+    }
 }
