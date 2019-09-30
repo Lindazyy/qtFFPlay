@@ -49,6 +49,8 @@ private:
     QString path;
     int maxValue = 1000;
     bool play_state = false;
+protected:
+    bool eventFilter( QObject *, QEvent * );
 private slots:
     void openFile();
     void replayVideo();

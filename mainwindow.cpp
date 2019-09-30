@@ -149,11 +149,11 @@ void MainWindow::fullScr()
 {
     if(play_state)
     {
-        //videoWidget->setFullScreen(true);
+        video->setFullScreen(true);
     }
     else
     {
-        //videoWidget->setFullScreen(false);
+        video->setFullScreen(false);
     }
 
 }
@@ -190,4 +190,17 @@ void MainWindow::sliderRenew()
 
 void MainWindow::videoStop(){
     frameUpdateTimer->stop();
+}
+
+bool MainWindow::eventFilter(QObject *obj, QEvent *ev)
+{
+    if(ev->type() == QEvent::KeyPress){
+        QKeyEvent *event = (QKeyEvent *)ev;
+        if(obj == video){
+            if(event->key() == Qt::Key_Escape){
+                video->setFullScreen(false);
+            }
+        }
+    }
+    return QWidget::eventFilter(obj, ev);
 }
