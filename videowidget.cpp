@@ -10,9 +10,10 @@ videoWidget::videoWidget(QWidget *parent) : QVideoWidget(parent)
 
 void videoWidget::paintEvent(QPaintEvent *e)
 {
-
+    QRect rec = this->geometry();
+    width = rec.width(); height = rec.height();
     QPainter pp(this);
-    QRect Temp(0,0,this->width,this->height);
+    QRect Temp(0,0, width, height);
     omp_set_lock(&lock);
     pp.drawImage(Temp, image);
     omp_unset_lock(&lock);
@@ -46,19 +47,60 @@ void videoWidget::playVideo(){
         exit(1);
     }
 
-    width = pCodecCtx->width; height = pCodecCtx->height;
-    this->setGeometry(0, 0, width, height);
+    v_w = pCodecCtx->width; v_h = pCodecCtx->height;
+    this->setGeometry(0, 0, v_w, v_h);
 
-    sws_ctx = sws_getContext(width, height, pCodecCtx->pix_fmt, width, height, AV_PIX_FMT_RGB24, SWS_BICUBIC, nullptr, nullptr, nullptr);
+    sws_ctx = sws_getContext(v_w, v_h, pCodecCtx->pix_fmt, v_w, v_h, AV_PIX_FMT_RGB24, SWS_BICUBIC, nullptr, nullptr, nullptr);
 
-    pFrameRGB = av_frame_alloc(); frame = av_frame_alloc();
-    int rgbBytes = av_image_get_buffer_size(AV_PIX_FMT_RGB24, width, height, 1);
+    pFrameRGB = av_frame_alloc();
+    frame = av_frame_alloc();
+    int rgbBytes = av_image_get_buffer_size(AV_PIX_FMT_RGB24, v_w, v_h, 1);
     bufferRGB = (uint8_t*)av_malloc(rgbBytes * sizeof(uint8_t));
-    av_image_fill_arrays(pFrameRGB->data, pFrameRGB->linesize, bufferRGB, AV_PIX_FMT_RGB24, width, height, 1);
+    av_image_fill_arrays(pFrameRGB->data, pFrameRGB->linesize, bufferRGB, AV_PIX_FMT_RGB24, v_w, v_h, 1);
+    stream=pFormatCtx->streams[videoStream];
+    fps = stream->avg_frame_rate.num/stream->avg_frame_rate.den;
+    std::cout << fps << std::endl;
+}
+
+cv::Mat videoWidget::avframe_to_cvmat(AVFrame *frame){
+    AVFrame dst;
+    cv::Mat m = cv::Mat(v_h, v_w, CV_8UC3);
+    memset(&dst, 0, sizeof(dst));
+    dst.data[0] = (uint8_t *)m.data;
+    avpicture_fill((AVPicture *)&dst, dst.data[0], AV_PIX_FMT_BGR24, v_w, v_h);
+    sws_scale(sws_ctx, frame->data, frame->linesize, 0, v_h, dst.data, dst.linesize);
+    return m;
+}
+
+cv::Mat videoWidget::findBestSize(cv::Mat mat, int w, int h){
+    cv::Mat fin;
+    float tmp_w = (float)height / (float)mat.rows * (float)mat.cols;
+    float tmp_h = (float)width / (float)mat.cols * (float)mat.rows;
+
+    if (tmp_w <= width) cv::resize(mat, fin, cv::Size((int)tmp_w, height), 0, 0, cv::INTER_NEAREST);
+    else cv::resize(mat, fin, cv::Size(width, (int)tmp_h), 0, 0, cv::INTER_NEAREST);
+    cv::Mat tmppic = cv::Mat::zeros(h,w,CV_8UC3);
+    cv::Mat imageROI = tmppic(cv::Rect((w - fin.cols) / 2, (height - fin.rows) / 2, fin.cols, fin.rows));				//top
+    fin.copyTo(imageROI);
+
+    return tmppic;
+}
+
+void videoWidget::setBlack(){
+    cv::Mat mat = cv::Mat(cv::Size(width, height), CV_8UC3, cv::Scalar(0,0,0));
+    const uchar *pSrc = (const uchar*)mat.data;
+    QImage img(pSrc, mat.cols, mat.rows, mat.step, QImage::Format_RGB888);
+    omp_set_lock(&lock);
+    image = img.copy();
+    omp_unset_lock(&lock);
 }
 
 void videoWidget::updateFrame(){
-
+    while(blackcnt!=30){
+        setBlack(); blackcnt++;
+        return;
+    }
+    emit blackEnd(fps);
     AVPacket                packet;
     int ret;
     do{
@@ -77,14 +119,34 @@ void videoWidget::updateFrame(){
             return;
         }
         timestamp = packet.pts* av_q2d(stream->time_base)*AV_TIME_BASE;
-        sws_scale(sws_ctx, (uint8_t const* const*)frame->data, frame->linesize, 0, pCodecCtx->height, pFrameRGB->data, pFrameRGB->linesize);
-        QImage img((uchar *)bufferRGB,width,height,QImage::Format_RGB888);
+        //sws_scale(sws_ctx, (uint8_t const* const*)frame->data, frame->linesize, 0, pCodecCtx->height, pFrameRGB->data, pFrameRGB->linesize);
+        //QImage img((uchar *)bufferRGB,width,height,QImage::Format_RGB888);
+
+        cv::Mat m = avframe_to_cvmat(frame);
+        cv::Mat last = findBestSize(m, width, height);
+        const uchar *pSrc = (const uchar*)last.data;
+        QImage img(pSrc, last.cols, last.rows, last.step, QImage::Format_RGB888);
+
         omp_set_lock(&lock);
         image = img.copy();
         omp_unset_lock(&lock);
     }else{
-        qDebug() << "bbbbbbbb";
+        if(mode==2){
+            setPosition(0);
+            return;
+        }
+        else if(mode==1){
+            blackcnt = 0;
+            while(blackcnt!=30){
+                setBlack(); blackcnt++;
+                return;
+            }
+            blackcnt = 0;
+            emit videoEnd();
+            return;
+        }
         emit videoEnd();
+        blackcnt = 0;
     }
     av_packet_unref(&packet);
 
@@ -122,8 +184,12 @@ void videoWidget::setPosition(int64_t position){
     }
     av_packet_unref(&pkt);
 
-    sws_scale(sws_ctx, (uint8_t const* const*)frame->data, frame->linesize, 0, pCodecCtx->height, pFrameRGB->data, pFrameRGB->linesize);
-    QImage img((uchar *)bufferRGB,width,height,QImage::Format_RGB888);
+    //sws_scale(sws_ctx, (uint8_t const* const*)frame->data, frame->linesize, 0, pCodecCtx->height, pFrameRGB->data, pFrameRGB->linesize);
+    //QImage img((uchar *)bufferRGB,width,height,QImage::Format_RGB888);
+    cv::Mat m = avframe_to_cvmat(frame);
+    cv::Mat last = findBestSize(m, width, height);
+    const uchar *pSrc = (const uchar*)last.data;
+    QImage img(pSrc, last.cols, last.rows, last.step, QImage::Format_RGB888);
     omp_set_lock(&lock);
     image = img.copy();
     omp_unset_lock(&lock);
@@ -138,8 +204,12 @@ void videoWidget::quickFlash(int64_t position){
     if(ret>=0){
         avcodec_send_packet(pCodecCtx, &pkt);
         avcodec_receive_frame(pCodecCtx, frame);
-        sws_scale(sws_ctx, (uint8_t const* const*)frame->data, frame->linesize, 0, pCodecCtx->height, pFrameRGB->data, pFrameRGB->linesize);
-        QImage img((uchar *)bufferRGB,width,height,QImage::Format_RGB888);
+        //sws_scale(sws_ctx, (uint8_t const* const*)frame->data, frame->linesize, 0, pCodecCtx->height, pFrameRGB->data, pFrameRGB->linesize);
+        //QImage img((uchar *)bufferRGB,width,height,QImage::Format_RGB888);
+        cv::Mat m = avframe_to_cvmat(frame);
+        cv::Mat last = findBestSize(m, width, height);
+        const uchar *pSrc = (const uchar*)last.data;
+        QImage img(pSrc, last.cols, last.rows, last.step, QImage::Format_RGB888);
         omp_set_lock(&lock);
         image = img.copy();
         omp_unset_lock(&lock);
@@ -162,8 +232,12 @@ void videoWidget::frameFlash(int64_t position, int64_t status){
                 timestamp = temp;
             }
         }
-        sws_scale(sws_ctx, (uint8_t const* const*)frame->data, frame->linesize, 0, pCodecCtx->height, pFrameRGB->data, pFrameRGB->linesize);
-        QImage img((uchar *)bufferRGB,width,height,QImage::Format_RGB888);
+        //sws_scale(sws_ctx, (uint8_t const* const*)frame->data, frame->linesize, 0, pCodecCtx->height, pFrameRGB->data, pFrameRGB->linesize);
+        //QImage img((uchar *)bufferRGB,width,height,QImage::Format_RGB888);
+        cv::Mat m = avframe_to_cvmat(frame);
+        cv::Mat last = findBestSize(m, width, height);
+        const uchar *pSrc = (const uchar*)last.data;
+        QImage img(pSrc, last.cols, last.rows, last.step, QImage::Format_RGB888);
         omp_set_lock(&lock);
         image = img.copy();
         omp_unset_lock(&lock);

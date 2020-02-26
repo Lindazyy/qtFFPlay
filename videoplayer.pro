@@ -31,12 +31,18 @@ SOURCES += \
         main.cpp \
         mainwindow.cpp \
     customerslider.cpp \
-    videowidget.cpp
+    videowidget.cpp \
+    mainwindow.cpp \
+    cachedframesequence.cpp \
+    mytreeview.cpp
 
 HEADERS += \
         mainwindow.h \
     customerslider.h \
-    videowidget.h
+    videowidget.h \
+    mainwindow.h \
+    cachedframesequence.h \
+    mytreeview.h
 
 # Default rules for deployment.
 qnx: target.path = /tmp/$${TARGET}/bin
@@ -72,3 +78,5 @@ else:win64:CONFIG(debug, debug|release): LIBS += -L$$PWD/../../ffmpeg-20190722-3
 
 win64:CONFIG(release, debug|release): LIBS += -L$$PWD/../../ffmpeg-20190722-3883c9d-win64-dev/ffmpeg-20190722-3883c9d-win64-dev/lib/ -lswscale
 else:win64:CONFIG(debug, debug|release): LIBS += -L$$PWD/../../ffmpeg-20190722-3883c9d-win64-dev/ffmpeg-20190722-3883c9d-win64-dev/lib/ -lswscale
+
+FORMS +=

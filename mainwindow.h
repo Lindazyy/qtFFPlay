@@ -12,8 +12,12 @@
 #include <QTimer>
 #include <QDir>
 #include <QFileDialog>
+#include <QMenuBar>
+#include <QMenu>
+#include <QAction>
 #include "customerslider.h"
 #include "videowidget.h"
+#include "mytreeview.h"
 #include "omp.h"
 
 
@@ -27,6 +31,12 @@ public:
     MainWindow(QWidget *parent = nullptr);
     ~MainWindow();
 private:
+
+    QMenuBar * mBar = menuBar();
+    QMenu    * mMode = mBar->addMenu("mode");
+    QAction  * mPlayBack = mMode->addAction("PlayBack");
+    QAction  * mBlackSCN = mMode->addAction("BlackScreen");
+    QAction  * mLastFrame = mMode->addAction("LastFrame");
     QWidget *widget;
     QPushButton *openFileBtn;
     QPushButton *playBtn;
@@ -35,6 +45,7 @@ private:
     QBoxLayout *ctlLayout;
     QBoxLayout *sliderLayout;
     QBoxLayout *mainLayout;
+    QBoxLayout *Layout;
 
     QImage *image;
     videoWidget *video;
@@ -46,6 +57,8 @@ private:
     QTimer * sliderTimer;
     QTimer * frameUpdateTimer;
     QTimer * renderTimer;
+    QTimer * listTimer;
+    MyTreeView *playerTree;
     QString path;
     int maxValue = 1000;
     bool play_state = false;
@@ -62,6 +75,10 @@ private slots:
     void slider_progress_released();
     void sliderRenew();
     void videoStop();
+
+    void playClickedVideo(QString);
+    void listRenew();
+    void changeFPS(int);
 };
 
 #endif // MAINWINDOW_H
